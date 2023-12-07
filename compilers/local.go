@@ -13,7 +13,7 @@ import (
 	"github.com/yuin/goldmark"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/pouyanh/blog"
+	"github.com/pattack/medad"
 )
 
 type localCompiler struct {
@@ -24,7 +24,7 @@ type localCompiler struct {
 	ArticlesDir     string
 }
 
-func LocalCompiler(opts ...tricks.Option[localCompiler]) blog.Compiler {
+func LocalCompiler(opts ...tricks.Option[localCompiler]) medad.Compiler {
 	c := localCompiler{
 		RootTemplate: "root.gohtml",
 		RootFilename: "index.html",

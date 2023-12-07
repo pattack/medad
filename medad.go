@@ -1,4 +1,4 @@
-package blog
+package medad
 
 import "html/template"
 

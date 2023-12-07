@@ -10,23 +10,23 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/pouyanh/blog"
-	"github.com/pouyanh/blog/compilers"
-	"github.com/pouyanh/blog/uploaders"
+	"github.com/pattack/medad"
+	"github.com/pattack/medad/compilers"
+	"github.com/pattack/medad/uploaders"
 )
 
 func main() {
-	var cmd medad
+	var cmd command
 	if err := cmd.run(context.Background()); err != nil {
 		log.Fatalf("error: %s", err)
 	}
 }
 
-type medad struct {
-	stn blog.Settings
+type command struct {
+	stn medad.Settings
 }
 
-func (c *medad) run(ctx context.Context) error {
+func (c *command) run(ctx context.Context) error {
 	root := cobra.Command{
 		Use:              "medad",
 		TraverseChildren: true,
@@ -74,7 +74,7 @@ func (c *medad) run(ctx context.Context) error {
 	return root.ExecuteContext(ctx)
 }
 
-func (c *medad) compile(cmd *cobra.Command, args []string) error {
+func (c *command) compile(cmd *cobra.Command, args []string) error {
 	templates, err := filepath.Glob(c.stn.TemplatesGlob)
 	if err != nil {
 		return fmt.Errorf("reading templates error: %w", err)
@@ -96,7 +96,7 @@ func (c *medad) compile(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func (c *medad) upload(cmd *cobra.Command, args []string) error {
+func (c *command) upload(cmd *cobra.Command, args []string) error {
 	fu := uploaders.FtpUploader{
 		Username: c.stn.FtpUsername,
 		Password: c.stn.FtpPassword,
@@ -114,7 +114,7 @@ func (c *medad) upload(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func (c *medad) update(cmd *cobra.Command, args []string) error {
+func (c *command) update(cmd *cobra.Command, args []string) error {
 	if err := c.compile(cmd, args); err != nil {
 		return err
 	}
