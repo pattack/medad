@@ -1,6 +1,6 @@
 module github.com/pattack/medad
 
-go 1.21.4
+go 1.21.5
 
 require (
 	github.com/janstoon/toolbox/tricks v0.5.1

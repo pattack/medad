@@ -23,7 +23,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
-          goversion: "1.21.4"
+          goversion: "1.21.5"
           project_path: "./cmd/medad"
           binary_name: medad
           extra_files: LICENSE
