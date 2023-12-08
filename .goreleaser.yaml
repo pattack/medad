@@ -1,0 +1,17 @@
+project_name: medad
+builds:
+  - id: medad
+    main: ./cmd/medad
+    goos:
+      - linux
+    goarch:
+      - 386
+      - amd64
+      - arm
+      - arm64
+    binary: medad
+
+archives:
+  - format: binary
+    files:
+      - LICENSE
