@@ -87,6 +87,7 @@ fabric.properties
 .idea/caches/build_file_checksums.ser
 
 # Generated files
+__*
 dist/
 
 # Dependency directories (remove the comment below to include it)
