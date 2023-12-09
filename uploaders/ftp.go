@@ -1,6 +1,7 @@
 package uploaders
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -19,8 +20,12 @@ type FtpUploader struct {
 	Timeout time.Duration
 }
 
-func (u FtpUploader) Upload(destination, source string) error {
-	c, err := ftp.Dial(fmt.Sprintf("%s:%s", u.Host, u.Port), ftp.DialWithTimeout(u.Timeout))
+func (u FtpUploader) Upload(ctx context.Context, local, remote string) error {
+	c, err := ftp.Dial(
+		fmt.Sprintf("%s:%s", u.Host, u.Port),
+		ftp.DialWithContext(ctx),
+		ftp.DialWithTimeout(u.Timeout),
+	)
 	if err != nil {
 		return fmt.Errorf("dial error: %w", err)
 	}
@@ -36,12 +41,12 @@ func (u FtpUploader) Upload(destination, source string) error {
 	}
 
 	for _, e := range ee {
-		if e.Name == destination {
+		if e.Name == remote {
 			if e.Type != ftp.EntryTypeFolder {
 				return fmt.Errorf("destination exists but is not a directory")
 			}
 
-			err = c.RemoveDirRecur(destination)
+			err = c.RemoveDirRecur(remote)
 			if err != nil {
 				return fmt.Errorf("cleaning destination before upload error: %w", err)
 			}
@@ -50,22 +55,22 @@ func (u FtpUploader) Upload(destination, source string) error {
 		}
 	}
 
-	err = c.MakeDir(destination)
+	err = c.MakeDir(remote)
 	if err != nil {
 		return fmt.Errorf("create remote directory error: %w", err)
 	}
 
-	err = c.ChangeDir(destination)
+	err = c.ChangeDir(remote)
 	if err != nil {
 		return fmt.Errorf("change directory error: %w", err)
 	}
 
-	err = filepath.WalkDir(source, func(path string, d fs.DirEntry, err error) error {
-		if path == source {
+	err = filepath.WalkDir(local, func(path string, d fs.DirEntry, err error) error {
+		if path == local {
 			return nil
 		}
 
-		rpath, err := filepath.Rel(source, path)
+		rpath, err := filepath.Rel(local, path)
 		if err != nil {
 			return fmt.Errorf("find rel path error: %w", err)
 		}

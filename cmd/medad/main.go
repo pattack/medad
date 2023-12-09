@@ -12,6 +12,7 @@ import (
 
 	"github.com/pattack/medad"
 	"github.com/pattack/medad/compilers"
+	"github.com/pattack/medad/loaders"
 	"github.com/pattack/medad/uploaders"
 )
 
@@ -40,18 +41,16 @@ func (c *command) run(ctx context.Context) error {
 	}
 	compile.Flags().StringVar(&c.stn.ArticlesGlob, "articles",
 		filepath.Join("content", "articles", "*", "*.md"), "Article files glob (pattern)")
-	compile.Flags().StringVarP(&c.stn.TemplatesGlob, "templates", "t", filepath.Join("templates", "*.gohtml"),
-		"Template files glob (pattern)")
+	compile.Flags().StringVarP(&c.stn.TemplatesGlob, "templates", "t",
+		filepath.Join("templates", "*.gohtml"), "Template files glob (pattern)")
 
 	upload := &cobra.Command{
 		Use:   "upload",
 		Short: "Uploads compiled html files to server",
 		RunE:  c.upload,
 	}
-	upload.Flags().StringVarP(&c.stn.FtpHost, "host", "H", "example.com",
-		"FTP Host to upload")
-	upload.Flags().StringVarP(&c.stn.FtpPort, "port", "P", "21",
-		"FTP Port to upload")
+	upload.Flags().StringVarP(&c.stn.FtpHost, "host", "H", "example.com", "FTP Host to upload")
+	upload.Flags().StringVarP(&c.stn.FtpPort, "port", "P", "21", "FTP Port to upload")
 	upload.Flags().StringVarP(&c.stn.FtpUsername, "username", "u", "anonymous",
 		"FTP Username to upload")
 	upload.Flags().StringVarP(&c.stn.FtpPassword, "password", "p", "",
@@ -74,7 +73,16 @@ func (c *command) run(ctx context.Context) error {
 	return root.ExecuteContext(ctx)
 }
 
-func (c *command) compile(cmd *cobra.Command, args []string) error {
+func (c *command) compile(cmd *cobra.Command, _ []string) error {
+	sources, err := filepath.Glob(c.stn.ArticlesGlob)
+	if err != nil {
+		return fmt.Errorf("reading contents error: %w", err)
+	}
+
+	log.Printf("source list to process: %+v\n", sources)
+	ll := loaders.LocalLoader()
+	articles := ll.Load(cmd.Context(), sources...)
+
 	templates, err := filepath.Glob(c.stn.TemplatesGlob)
 	if err != nil {
 		return fmt.Errorf("reading templates error: %w", err)
@@ -82,13 +90,8 @@ func (c *command) compile(cmd *cobra.Command, args []string) error {
 	tpl := template.Must(template.ParseFiles(templates...))
 	log.Printf("template list loaded: %+v\n", templates)
 
-	sources, err := filepath.Glob(c.stn.ArticlesGlob)
-	if err != nil {
-		return fmt.Errorf("reading contents error: %w", err)
-	}
-	log.Printf("source list to process: %+v\n", sources)
-	lc := compilers.LocalCompiler()
-	err = lc.Compile(tpl, c.stn.DistDirectory, sources...)
+	mc := compilers.MarkdownCompiler()
+	err = mc.Compile(cmd.Context(), tpl, c.stn.DistDirectory, articles)
 	if err != nil {
 		return fmt.Errorf("compile error: %w", err)
 	}
@@ -96,7 +99,7 @@ func (c *command) compile(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func (c *command) upload(cmd *cobra.Command, args []string) error {
+func (c *command) upload(cmd *cobra.Command, _ []string) error {
 	fu := uploaders.FtpUploader{
 		Username: c.stn.FtpUsername,
 		Password: c.stn.FtpPassword,
@@ -106,7 +109,7 @@ func (c *command) upload(cmd *cobra.Command, args []string) error {
 		Timeout: 5 * time.Second,
 	}
 
-	err := fu.Upload(c.stn.RemoteDirectory, c.stn.DistDirectory)
+	err := fu.Upload(cmd.Context(), c.stn.DistDirectory, c.stn.RemoteDirectory)
 	if err != nil {
 		return fmt.Errorf("upload error: %w", err)
 	}

@@ -3,6 +3,7 @@ module github.com/pattack/medad
 go 1.21.5
 
 require (
+	github.com/janstoon/toolbox/bricks v0.2.4
 	github.com/janstoon/toolbox/tricks v0.5.1
 	github.com/jlaffaye/ftp v0.2.0
 	github.com/russross/blackfriday/v2 v2.1.0

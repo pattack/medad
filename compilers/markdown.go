@@ -1,13 +1,17 @@
 package compilers
 
 import (
+	"context"
 	"fmt"
 	"html/template"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/janstoon/toolbox/bricks"
 	"github.com/janstoon/toolbox/tricks"
 	"github.com/russross/blackfriday/v2"
 	"github.com/yuin/goldmark"
@@ -16,7 +20,7 @@ import (
 	"github.com/pattack/medad"
 )
 
-type localCompiler struct {
+type markdownCompiler struct {
 	RootTemplate string
 	RootFilename string
 
@@ -24,8 +28,8 @@ type localCompiler struct {
 	ArticlesDir     string
 }
 
-func LocalCompiler(opts ...tricks.Option[localCompiler]) medad.Compiler {
-	c := localCompiler{
+func MarkdownCompiler(opts ...tricks.Option[markdownCompiler]) medad.Compiler {
+	c := markdownCompiler{
 		RootTemplate: "root.gohtml",
 		RootFilename: "index.html",
 
@@ -37,18 +41,20 @@ func LocalCompiler(opts ...tricks.Option[localCompiler]) medad.Compiler {
 	return c
 }
 
-func (c localCompiler) Compile(tpl *template.Template, destination string, sources ...string) error {
+func (c markdownCompiler) Compile(
+	ctx context.Context, tpl *template.Template, destination string, sources bricks.Bag[medad.Article],
+) error {
 	err := os.MkdirAll(destination, 0755)
 	if nil != err {
 		return err
 	}
 
-	articles, err := c.compileArticles(tpl, destination, sources...)
+	aa, err := c.compileArticles(ctx, tpl, destination, sources)
 	if nil != err {
 		return err
 	}
 
-	err = c.compileIndex(tpl, destination, articles...)
+	err = c.compileIndex(ctx, tpl, destination, aa...)
 	if nil != err {
 		return err
 	}
@@ -56,8 +62,8 @@ func (c localCompiler) Compile(tpl *template.Template, destination string, sourc
 	return nil
 }
 
-func (c localCompiler) compileArticles(
-	tpl *template.Template, destination string, sources ...string,
+func (c markdownCompiler) compileArticles(
+	ctx context.Context, tpl *template.Template, destination string, sources bricks.Bag[medad.Article],
 ) ([]article, error) {
 	dstArticles := filepath.Join(destination, c.ArticlesDir)
 	err := os.MkdirAll(dstArticles, 0755)
@@ -65,39 +71,68 @@ func (c localCompiler) compileArticles(
 		return nil, err
 	}
 
-	aa := make([]article, len(sources))
-	wg := errgroup.Group{}
-	for k, filename := range sources {
-		func(k int, filename string) {
-			wg.Go(func() error {
-				a, err := c.compileArticle(tpl, dstArticles, filename)
-				if err != nil {
-					return err
+	aa := make([]article, 0)
+	caa := make(chan article, 10)
+	wgCollect := sync.WaitGroup{}
+	wgCollect.Add(1)
+	go func(ctx context.Context) {
+		defer wgCollect.Done()
+
+		for {
+			select {
+			case a, ok := <-caa:
+				if !ok {
+					return
 				}
 
-				aa[k] = tricks.PtrVal(a)
+				aa = append(aa, a)
 
-				return nil
-			})
-		}(k, filename)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}(ctx)
+
+	wgCompile := errgroup.Group{}
+	for src, err := sources.Pull(ctx); err != nil; src, err = sources.Pull(ctx) {
+		func(src *medad.Article) {
+			for langCode := range src.Content {
+				wgCompile.Go(func() error {
+					a, err := c.compileArticle(ctx, tpl, dstArticles, langCode, src)
+					if err != nil {
+						return err
+					}
+
+					caa <- tricks.PtrVal(a)
+
+					return nil
+				})
+			}
+		}(src)
 	}
 
-	if err := wg.Wait(); err != nil {
+	if err := wgCompile.Wait(); err != nil {
+		close(caa)
+
 		return nil, err
 	}
+
+	close(caa)
+	wgCollect.Wait()
 
 	return aa, nil
 }
 
-func (c localCompiler) compileArticle(tpl *template.Template, destination, source string) (*article, error) {
-	bb, err := os.ReadFile(source)
+func (c markdownCompiler) compileArticle(
+	ctx context.Context, tpl *template.Template, destination string, langCode medad.LangCode, src *medad.Article,
+) (*article, error) {
+	bb, err := io.ReadAll(src.Content[langCode])
 	if err != nil {
 		return nil, err
 	}
 
-	lang := extensionless(filepath.Base(source))
-	an := filepath.Base(filepath.Dir(source))
-	bn := fmt.Sprintf("%s.%s.html", an, lang)
+	an := src.Name
+	bn := fmt.Sprintf("%s.%s.html", an, langCode)
 
 	doc := blackfriday.New().Parse(bb)
 	title := getTitle(doc, an)
@@ -116,13 +151,15 @@ func (c localCompiler) compileArticle(tpl *template.Template, destination, sourc
 	}
 
 	return &article{
-		Title: title,
-		Lang:  lang,
-		Link:  filepath.Join(c.ArticlesDir, bn),
+		Title:    title,
+		LangCode: langCode,
+		Link:     filepath.Join(c.ArticlesDir, bn),
 	}, nil
 }
 
-func (c localCompiler) compileIndex(tpl *template.Template, destination string, articles ...article) error {
+func (c markdownCompiler) compileIndex(
+	ctx context.Context, tpl *template.Template, destination string, articles ...article,
+) error {
 	fh, err := os.Create(filepath.Join(destination, c.RootFilename))
 	if nil != err {
 		return err
@@ -157,7 +194,7 @@ func getTitle(doc *blackfriday.Node, fallback string) string {
 type args struct {
 	Header    header
 	Defaults  defaults
-	Languages map[string]language
+	Languages map[medad.LangCode]medad.Language
 	Articles  []article
 }
 
@@ -165,14 +202,14 @@ func newArgs(articles ...article) args {
 	scope := args{
 		Header: newHeader(),
 		Defaults: defaults{
-			Lang: "en",
+			LangCode: medad.LangCodeEnglish,
 		},
-		Languages: make(map[string]language),
+		Languages: make(map[medad.LangCode]medad.Language),
 		Articles:  articles,
 	}
 
 	for _, a := range articles {
-		scope.Languages[a.Lang] = languages[a.Lang]
+		scope.Languages[a.LangCode] = medad.Languages[a.LangCode]
 	}
 
 	return scope
@@ -203,30 +240,11 @@ func newHeader() header {
 }
 
 type defaults struct {
-	Lang string
-}
-
-type language struct {
-	UpperCode string // Contains ISO 639-1 two-letter code in uppercase
-	Title     string
-	Rtl       bool
-}
-
-var languages = map[string]language{
-	"en": {
-		UpperCode: "EN",
-		Title:     "English",
-		Rtl:       false,
-	},
-	"fa": {
-		UpperCode: "FA",
-		Title:     "فارسی",
-		Rtl:       true,
-	},
+	LangCode medad.LangCode
 }
 
 type article struct {
-	Title string
-	Lang  string
-	Link  string
+	Title    string
+	LangCode medad.LangCode
+	Link     string
 }

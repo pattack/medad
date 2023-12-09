@@ -7,6 +7,8 @@ github.com/hashicorp/go-multierror v1.1.1 h1:H5DkEtf6CXdFp0N0Em5UCwQpXMWke8IA0+l
 github.com/hashicorp/go-multierror v1.1.1/go.mod h1:iw975J/qwKPdAO1clOe2L8331t/9/fmwbPZ6JB6eMoM=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
+github.com/janstoon/toolbox/bricks v0.2.4 h1:mX2SQYlxT3imE3Vq6Bsq0A7ODPtwG2h8vPJ1vCr2KkY=
+github.com/janstoon/toolbox/bricks v0.2.4/go.mod h1:wpAul9fxT0tGmoOGfTU4ub6RnbVIFQFC+1xNmZqXRKQ=
 github.com/janstoon/toolbox/tricks v0.5.1 h1:UnA0Hvc3CPHefCZ6IRA7Hnvdb+v/R/K7APn9/VLjlmg=
 github.com/janstoon/toolbox/tricks v0.5.1/go.mod h1:TB7Cn727lv+QerRLMzwl4Exz8ijPicFb9Uwmdh0dwWo=
 github.com/jlaffaye/ftp v0.2.0 h1:lXNvW7cBu7R/68bknOX3MrRIIqZ61zELs1P2RAiA3lg=
